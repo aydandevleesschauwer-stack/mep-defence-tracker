@@ -24,12 +24,13 @@ from rapidfuzz import fuzz
 from bs4 import BeautifulSoup
 
 # ─── Configuration ────────────────────────────────────────────────────────────
-
+def slugify(name):
+    return name.upper().replace(" ", "_")
 FUZZY_THRESHOLD  = 85
 REQUEST_DELAY    = 1.0
 OUTPUT_FILE      = os.path.join("data", "meetings.json")
 EP_API           = "https://data.europarl.europa.eu/api/v2"
-MEP_MEETINGS_URL = "https://www.europarl.europa.eu/meps/en/{mep_id}/meetings/past"
+MEP_MEETINGS_URL = "https://www.europarl.europa.eu/meps/en/{mep_id}/{slug}/meetings/past"
 
 # ─── Step 1: Load firm list ────────────────────────────────────────────────────
 
@@ -93,8 +94,9 @@ def fetch_meps_from_website():
 
 # ─── Step 3: Scrape meetings for one MEP ──────────────────────────────────────
 
-def fetch_mep_meetings_html(mep_id):
-    url = MEP_MEETINGS_URL.format(mep_id=mep_id)
+def fetch_mep_meetings_html(mep_id, mep_name):
+    slug = slugify(mep_name)
+url = MEP_MEETINGS_URL.format(mep_id=mep_id, slug=slug)
     try:
         resp = requests.get(url, timeout=30,
                             headers={"User-Agent": "Mozilla/5.0 (compatible; research-scraper)"})
@@ -179,7 +181,7 @@ def run():
             continue
         print(f"[{i+1}/{len(meps)}] {mep_name} (ID: {mep_id})")
 
-        meetings = fetch_mep_meetings_html(mep_id)
+       meetings = fetch_mep_meetings_html(mep_id, mep_name)
         total_meetings_checked += len(meetings)
 
         for meeting in meetings:
