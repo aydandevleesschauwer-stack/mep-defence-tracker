@@ -1,17 +1,9 @@
 # .github/workflows/refresh.yml
-#
-# This workflow runs the scraper automatically every week (Monday 6am UTC),
-# and also allows manual triggering from the GitHub website.
-# It commits any updated data back to the repo automatically using GITHUB_TOKEN.
-
 name: Refresh MEP meeting data
 
 on:
-  # Run every Monday at 06:00 UTC
   schedule:
-    - cron: "0 6 * * 1"
-
-  # Also allow manual triggering from the GitHub Actions tab
+    - cron: "0 6 * * 1"  # elke maandag 6:00 UTC
   workflow_dispatch:
 
 jobs:
@@ -19,35 +11,34 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Check out your repository with token
+      # 1. Check out repo (zonder credentials overschrijven)
       - name: Check out repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false  # Belangrijk: voorkomt overschrijven
 
-      # 2. Set up Python 3.11
+      # 2. Set up Python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # 3. Install required Python packages
+      # 3. Install dependencies
       - name: Install dependencies
         run: |
           pip install requests beautifulsoup4 lxml rapidfuzz
 
-      # 4. Run the scraper
+      # 4. Run scraper
       - name: Run scraper
         run: python scraper.py
 
-      # 5. Commit and push any new/changed data files
+      # 5. Commit and push updated data
       - name: Commit updated data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/meetings.json
-          # Only commit if something actually changed
           git diff --staged --quiet || git commit -m "Auto-refresh: $(date -u +'%Y-%m-%d')"
-          git push origin HEAD:main
+          git push https://x-access-token:${GITHUB_TOKEN}@github.com/aydandevleesschauwer-stack/mep-defence-tracker.git HEAD:main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
