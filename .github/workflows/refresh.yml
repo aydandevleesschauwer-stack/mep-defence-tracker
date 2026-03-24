@@ -32,7 +32,7 @@ jobs:
       # 3. Install the required Python packages
       - name: Install dependencies
         run: |
-          pip install requests rapidfuzz
+          pip install requests rapidfuzz beautifulsoup4 lxml
 
       # 4. Run the scraper
       - name: Run scraper
