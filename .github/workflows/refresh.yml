@@ -22,6 +22,8 @@ jobs:
       # 1. Check out your repository
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false   # belangrijk voor push met GITHUB_TOKEN
 
       # 2. Set up Python 3.11
       - name: Set up Python
