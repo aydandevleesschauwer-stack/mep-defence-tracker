@@ -1,7 +1,7 @@
 import csv
 import json
-import time
 import os
+import time
 import requests
 from rapidfuzz import fuzz
 from bs4 import BeautifulSoup
@@ -24,27 +24,19 @@ def get_mep_id(mep):
     return str(mep.get("identifier", "")).split("/")[-1]
 
 def get_mep_name(mep):
-    # Probeer eerst oude 'label'
     labels = mep.get("label", [])
     if isinstance(labels, list) and labels:
         item = labels[0]
         if isinstance(item, dict):
             return item.get("value")
         return str(item)
-
-    # Probeer nieuw veld 'fullName'
     if "fullName" in mep:
         return mep["fullName"]
-
-    # Probeer firstName + lastName
     first = mep.get("firstName", "")
     last = mep.get("lastName", "")
     if first or last:
         return f"{first} {last}".strip()
-
-    # fallback naar MEP_<ID> voor URL
-    mep_id = get_mep_id(mep)
-    return f"MEP_{mep_id}"
+    return f"MEP_{get_mep_id(mep)}"
 
 # ─── LOAD FIRMS ────────────────────────────────────
 def load_firms(filepath="firms.csv"):
@@ -62,15 +54,13 @@ def load_firms(filepath="firms.csv"):
 def fetch_all_meps():
     url = "https://data.europarl.europa.eu/api/v2/meps"
     params = {"parliamentary-term": "10", "limit": 705}
-    headers = {"Accept": "application/ld+json"}
-
+    headers = {"Accept": "application/json"}
     try:
         resp = requests.get(url, params=params, headers=headers, timeout=30)
         resp.raise_for_status()
         data = resp.json()
         meps = data.get("data", [])
         print(f"Found {len(meps)} MEPs")
-        # tijdelijk: eerste 3 MEPs loggen voor debugging
         print("Sample MEPs:", meps[:3])
         return meps
     except Exception as e:
@@ -81,9 +71,9 @@ def fetch_all_meps():
 def fetch_mep_meetings(mep_id, mep_name):
     slug = slugify(mep_name)
     url = f"https://www.europarl.europa.eu/meps/en/{mep_id}/{slug}/meetings/past"
-
+    print(f"Fetching URL: {url}")
     try:
-        resp = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
+        resp = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0"}, allow_redirects=True)
         if resp.status_code != 200:
             print(f"  Skipping {mep_id} ({resp.status_code})")
             return []
@@ -95,10 +85,11 @@ def fetch_mep_meetings(mep_id, mep_name):
     meetings = []
 
     entries = soup.select("div.erpl_document")
+    if not entries:
+        print(f"  No meetings found for {mep_name} ({mep_id})")
     for entry in entries:
         date_tag = entry.select_one("time")
         topic_tag = entry.select_one("h3")
-
         date = date_tag.get_text(strip=True) if date_tag else ""
         topic = topic_tag.get_text(strip=True) if topic_tag else ""
 
@@ -107,7 +98,6 @@ def fetch_mep_meetings(mep_id, mep_name):
             text = tag.get_text(strip=True)
             if len(text) > 3:
                 orgs.append(text)
-
         if not orgs and topic:
             orgs = [topic]
 
@@ -117,13 +107,13 @@ def fetch_mep_meetings(mep_id, mep_name):
             "organisations": list(set(orgs))
         })
 
+    print(f"  Found {len(meetings)} meetings for {mep_name}")
     return meetings
 
 # ─── MATCH FIRMS ───────────────────────────────────
 def match_firms(org_names, firms):
     matched = []
     seen = set()
-
     for org in org_names:
         org_clean = org.lower()
         for canonical, terms in firms.items():
@@ -137,7 +127,6 @@ def match_firms(org_names, firms):
                     })
                     seen.add(canonical)
                     break
-
     return matched
 
 # ─── MAIN ──────────────────────────────────────────
@@ -146,17 +135,14 @@ def run():
 
     firms = load_firms()
     meps = fetch_all_meps()
-
     all_matches = []
 
     for i, mep in enumerate(meps):
         mep_id = get_mep_id(mep)
         mep_name = get_mep_name(mep)
-
         print(f"[{i+1}/{len(meps)}] {mep_name} ({mep_id})")
 
         meetings = fetch_mep_meetings(mep_id, mep_name)
-
         for meeting in meetings:
             matched = match_firms(meeting["organisations"], firms)
             if matched:
@@ -180,7 +166,7 @@ def run():
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         json.dump(output, f, indent=2)
 
-    print("Done!")
+    print("Done! JSON written to", OUTPUT_FILE)
 
 if __name__ == "__main__":
     run()
