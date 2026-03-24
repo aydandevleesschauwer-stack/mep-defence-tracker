@@ -97,7 +97,7 @@ def fetch_meps_from_website():
 def fetch_mep_meetings_html(mep_id, mep_name):
     slug = slugify(mep_name)
 url = MEP_MEETINGS_URL.format(mep_id=mep_id, slug=slug)
-    try:
+try:
         resp = requests.get(url, timeout=30,
                             headers={"User-Agent": "Mozilla/5.0 (compatible; research-scraper)"})
         if resp.status_code == 404:
