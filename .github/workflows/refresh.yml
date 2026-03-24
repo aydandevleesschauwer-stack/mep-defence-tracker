@@ -1,8 +1,8 @@
 # .github/workflows/refresh.yml
 #
 # This workflow runs the scraper automatically every week (Monday 6am UTC),
-# and also lets you trigger it manually from the GitHub website.
-# It commits any updated data back to the repo automatically.
+# and also allows manual triggering from the GitHub website.
+# It commits any updated data back to the repo automatically using GITHUB_TOKEN.
 
 name: Refresh MEP meeting data
 
@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Check out your repo
+      # 1. Check out your repository
       - name: Check out repository
         uses: actions/checkout@v4
 
@@ -29,10 +29,10 @@ jobs:
         with:
           python-version: "3.11"
 
-      # 3. Install the required Python packages
+      # 3. Install required Python packages
       - name: Install dependencies
         run: |
-          pip install requests rapidfuzz beautifulsoup4 lxml
+          pip install requests beautifulsoup4 lxml rapidfuzz
 
       # 4. Run the scraper
       - name: Run scraper
