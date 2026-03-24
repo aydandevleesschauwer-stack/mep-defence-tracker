@@ -2,7 +2,6 @@ import csv
 import json
 import time
 import os
-import re
 import requests
 from rapidfuzz import fuzz
 from bs4 import BeautifulSoup
@@ -25,10 +24,18 @@ def get_mep_id(mep):
     return str(mep.get("identifier", "")).split("/")[-1]
 
 def get_mep_name(mep):
+    # Probeer eerst 'label'
     labels = mep.get("label", [])
     if isinstance(labels, list) and labels:
         item = labels[0]
-        return item.get("value", "") if isinstance(item, dict) else str(item)
+        if isinstance(item, dict):
+            return item.get("value", "")
+        return str(item)
+    # fallback naar firstName + lastName
+    first = mep.get("firstName", "")
+    last = mep.get("lastName", "")
+    if first or last:
+        return f"{first} {last}".strip()
     return "UNKNOWN"
 
 # ─── LOAD FIRMS ────────────────────────────────────
@@ -47,7 +54,7 @@ def load_firms(filepath="firms.csv"):
 def fetch_all_meps():
     url = "https://data.europarl.europa.eu/api/v2/meps"
     params = {"parliamentary-term": "10", "limit": 705}
-    headers = {"Accept": "application/ld+json"}  # << Fix voor 406 error
+    headers = {"Accept": "application/ld+json"}  # Fix voor 406
 
     try:
         resp = requests.get(url, params=params, headers=headers, timeout=30)
@@ -78,7 +85,6 @@ def fetch_mep_meetings(mep_id, mep_name):
     meetings = []
 
     entries = soup.select("div.erpl_document")
-
     for entry in entries:
         date_tag = entry.select_one("time")
         topic_tag = entry.select_one("h3")
@@ -131,17 +137,20 @@ def run():
     firms = load_firms()
     meps = fetch_all_meps()
 
+    unknown_count = 0
     all_matches = []
 
     for i, mep in enumerate(meps):
         mep_id = get_mep_id(mep)
         mep_name = get_mep_name(mep)
 
+        if mep_name == "UNKNOWN":
+            unknown_count += 1
+
         if not mep_id.isdigit():
             continue
 
         print(f"[{i+1}/{len(meps)}] {mep_name} ({mep_id})")
-
         meetings = fetch_mep_meetings(mep_id, mep_name)
 
         for meeting in meetings:
@@ -157,6 +166,8 @@ def run():
                 print("  ✓ match")
 
         time.sleep(REQUEST_DELAY)
+
+    print(f"UNKNOWN MEPs: {unknown_count} / {len(meps)}")
 
     output = {
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
