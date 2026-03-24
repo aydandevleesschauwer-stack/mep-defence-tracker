@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MEP Defence Industry Meetings Tracker</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f4f4f0;
+      color: #1a1a18;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    header {
+      background: #1a2744;
+      color: white;
+      padding: 24px 32px;
+    }
+    header h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+    header p  { font-size: 13px; opacity: 0.7; }
+
+    .meta-bar {
+      background: #e8e6df;
+      padding: 10px 32px;
+      font-size: 12px;
+      color: #555;
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+    .meta-bar strong { color: #1a1a18; }
+
+    .container { max-width: 1200px; margin: 0 auto; padding: 24px 32px; }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 20px;
+      border-bottom: 2px solid #ddd;
+    }
+    .tab-btn {
+      padding: 8px 20px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      color: #666;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+    }
+    .tab-btn.active { color: #1a2744; border-bottom-color: #1a2744; }
+
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    /* ── Search & filters ── */
+    .controls {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .controls input, .controls select {
+      padding: 7px 12px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 13px;
+      background: white;
+    }
+    .controls input { flex: 1; min-width: 200px; }
+    .result-count { font-size: 13px; color: #777; margin-left: auto; }
+
+    /* ── Card grid ── */
+    .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+
+    .card {
+      background: white;
+      border-radius: 10px;
+      padding: 16px 20px;
+      border: 1px solid #e0ddd6;
+      cursor: pointer;
+      transition: box-shadow 0.15s;
+    }
+    .card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
+    .card-title { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+    .card-sub   { font-size: 12px; color: #888; margin-bottom: 10px; }
+    .card-firms { display: flex; flex-wrap: wrap; gap: 5px; }
+    .firm-tag {
+      background: #e8eef5;
+      color: #1a3a60;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-weight: 500;
+    }
+    .firm-tag.more { background: #eee; color: #888; }
+    .meeting-count {
+      font-size: 12px;
+      color: #888;
+      margin-top: 8px;
+    }
+
+    /* ── Detail panel ── */
+    .detail-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .detail-overlay.open { display: flex; }
+    .detail-panel {
+      background: white;
+      border-radius: 12px;
+      padding: 28px 32px;
+      max-width: 700px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .detail-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+    .detail-header h2 { font-size: 20px; font-weight: 600; }
+    .detail-header .close-btn {
+      background: none; border: none; font-size: 22px; cursor: pointer; color: #888;
+    }
+    .detail-badges { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+    .badge {
+      background: #f0f0ec;
+      font-size: 12px;
+      padding: 3px 10px;
+      border-radius: 12px;
+      color: #555;
+    }
+    .meeting-list { list-style: none; }
+    .meeting-item {
+      padding: 12px 0;
+      border-bottom: 1px solid #f0ede6;
+    }
+    .meeting-item:last-child { border-bottom: none; }
+    .meeting-date { font-size: 12px; color: #999; margin-bottom: 3px; }
+    .meeting-topic { font-size: 14px; margin-bottom: 6px; }
+    .meeting-firms-row { display: flex; gap: 5px; flex-wrap: wrap; }
+    .ep-link {
+      display: inline-block;
+      margin-top: 12px;
+      font-size: 12px;
+      color: #1a5aa0;
+      text-decoration: none;
+    }
+    .ep-link:hover { text-decoration: underline; }
+
+    /* ── Meetings table (raw view) ── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: white; border-radius: 10px; overflow: hidden; }
+    th { background: #1a2744; color: white; padding: 10px 14px; text-align: left; font-weight: 500; }
+    td { padding: 9px 14px; border-bottom: 1px solid #f0ede6; vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f9f8f5; }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #aaa;
+      font-size: 14px;
+    }
+
+    @media (max-width: 600px) {
+      header, .container { padding: 16px; }
+      .meta-bar { padding: 8px 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>MEP Defence Industry Meetings Tracker</h1>
+  <p>Meetings between MEPs and European defence industry firms — filtered from EP official disclosure data</p>
+</header>
+
+<div class="meta-bar" id="meta-bar">
+  <span>Loading data…</span>
+</div>
+
+<div class="container">
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('meps')">By MEP</button>
+    <button class="tab-btn" onclick="switchTab('firms')">By Firm</button>
+    <button class="tab-btn" onclick="switchTab('all')">All Meetings</button>
+  </div>
+
+  <!-- MEP view -->
+  <div id="tab-meps" class="tab-pane active">
+    <div class="controls">
+      <input type="text" id="mep-search" placeholder="Search MEP name, country or group…" oninput="renderMEPs()">
+      <select id="mep-country" onchange="renderMEPs()"><option value="">All countries</option></select>
+      <select id="mep-group" onchange="renderMEPs()"><option value="">All groups</option></select>
+      <span class="result-count" id="mep-count"></span>
+    </div>
+    <div class="cards" id="mep-cards"></div>
+  </div>
+
+  <!-- Firm view -->
+  <div id="tab-firms" class="tab-pane">
+    <div class="controls">
+      <input type="text" id="firm-search" placeholder="Search firm name…" oninput="renderFirms()">
+      <span class="result-count" id="firm-count"></span>
+    </div>
+    <div class="cards" id="firm-cards"></div>
+  </div>
+
+  <!-- All meetings table -->
+  <div id="tab-all" class="tab-pane">
+    <div class="controls">
+      <input type="text" id="all-search" placeholder="Search MEP, firm, or topic…" oninput="renderAll()">
+      <select id="all-firm" onchange="renderAll()"><option value="">All firms</option></select>
+      <span class="result-count" id="all-count"></span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>MEP</th>
+            <th>Country</th>
+            <th>Group</th>
+            <th>Firm(s)</th>
+            <th>Topic</th>
+          </tr>
+        </thead>
+        <tbody id="all-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Detail overlay -->
+<div class="detail-overlay" id="detail-overlay" onclick="closeDetail(event)">
+  <div class="detail-panel" id="detail-panel">
+    <div class="detail-header">
+      <h2 id="detail-title"></h2>
+      <button class="close-btn" onclick="closeDetailDirect()">×</button>
+    </div>
+    <div class="detail-badges" id="detail-badges"></div>
+    <ul class="meeting-list" id="detail-meetings"></ul>
+    <a class="ep-link" id="detail-ep-link" target="_blank" rel="noopener"></a>
+  </div>
+</div>
+
+<script>
+let allData = { meetings: [] };
+
+// ── Load data ──────────────────────────────────────────────────────────────
+async function loadData() {
+  try {
+    const resp = await fetch("data/meetings.json");
+    if (!resp.ok) throw new Error("meetings.json not found");
+    allData = await resp.json();
+  } catch (e) {
+    // If running locally before scraper has run, load empty sample
+    allData = { meetings: [], generated_at: "—", total_meps_checked: 0, total_matches: 0 };
+  }
+
+  // Update meta bar
+  document.getElementById("meta-bar").innerHTML = `
+    <span>Last updated: <strong>${allData.generated_at || "—"}</strong></span>
+    <span>MEPs checked: <strong>${allData.total_meps_checked || 0}</strong></span>
+    <span>Matching meetings: <strong>${allData.total_matches || allData.meetings.length}</strong></span>
+  `;
+
+  populateFilters();
+  renderMEPs();
+  renderFirms();
+  renderAll();
+}
+
+// ── Populate filter dropdowns ───────────────────────────────────────────────
+function populateFilters() {
+  const countries = [...new Set(allData.meetings.map(m => m.mep_country).filter(Boolean))].sort();
+  const groups    = [...new Set(allData.meetings.map(m => m.mep_group).filter(Boolean))].sort();
+  const firms     = [...new Set(allData.meetings.flatMap(m => m.matched_firms.map(f => f.canonical_firm)))].sort();
+
+  addOptions("mep-country", countries);
+  addOptions("mep-group", groups);
+  addOptions("all-firm", firms);
+}
+
+function addOptions(id, values) {
+  const el = document.getElementById(id);
+  values.forEach(v => {
+    const opt = document.createElement("option");
+    opt.value = v; opt.textContent = v;
+    el.appendChild(opt);
+  });
+}
+
+// ── Group meetings by MEP ──────────────────────────────────────────────────
+function groupByMEP(meetings) {
+  const map = {};
+  meetings.forEach(m => {
+    if (!map[m.mep_id]) {
+      map[m.mep_id] = {
+        id: m.mep_id, name: m.mep_name,
+        country: m.mep_country, group: m.mep_group,
+        source_url: m.source_url, meetings: []
+      };
+    }
+    map[m.mep_id].meetings.push(m);
+  });
+  return Object.values(map).sort((a,b) => a.name.localeCompare(b.name));
+}
+
+// ── Group meetings by firm ─────────────────────────────────────────────────
+function groupByFirm(meetings) {
+  const map = {};
+  meetings.forEach(m => {
+    m.matched_firms.forEach(f => {
+      const key = f.canonical_firm;
+      if (!map[key]) map[key] = { name: key, meetings: [] };
+      map[key].meetings.push(m);
+    });
+  });
+  return Object.values(map).sort((a,b) => b.meetings.length - a.meetings.length);
+}
+
+// ── Render MEP cards ────────────────────────────────────────────────────────
+function renderMEPs() {
+  const q    = document.getElementById("mep-search").value.toLowerCase();
+  const c    = document.getElementById("mep-country").value;
+  const g    = document.getElementById("mep-group").value;
+
+  let meetings = allData.meetings.filter(m => {
+    if (c && m.mep_country !== c) return false;
+    if (g && m.mep_group !== g)   return false;
+    if (q && !`${m.mep_name} ${m.mep_country} ${m.mep_group}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  const meps = groupByMEP(meetings);
+  document.getElementById("mep-count").textContent = `${meps.length} MEPs`;
+
+  const container = document.getElementById("mep-cards");
+  if (!meps.length) { container.innerHTML = '<div class="empty-state">No MEPs found matching your filters.</div>'; return; }
+
+  container.innerHTML = meps.map(mep => {
+    const firms = [...new Set(mep.meetings.flatMap(m => m.matched_firms.map(f => f.canonical_firm)))];
+    const shown = firms.slice(0, 4);
+    const extra = firms.length - shown.length;
+    return `
+      <div class="card" onclick="openMEP(${JSON.stringify(mep.id)})">
+        <div class="card-title">${esc(mep.name)}</div>
+        <div class="card-sub">${esc(mep.country)} · ${esc(mep.group)}</div>
+        <div class="card-firms">
+          ${shown.map(f => `<span class="firm-tag">${esc(f)}</span>`).join("")}
+          ${extra > 0 ? `<span class="firm-tag more">+${extra} more</span>` : ""}
+        </div>
+        <div class="meeting-count">${mep.meetings.length} matching meeting${mep.meetings.length !== 1 ? "s" : ""}</div>
+      </div>`;
+  }).join("");
+}
+
+// ── Render Firm cards ───────────────────────────────────────────────────────
+function renderFirms() {
+  const q = document.getElementById("firm-search").value.toLowerCase();
+  let firms = groupByFirm(allData.meetings)
+    .filter(f => !q || f.name.toLowerCase().includes(q));
+
+  document.getElementById("firm-count").textContent = `${firms.length} firms`;
+
+  const container = document.getElementById("firm-cards");
+  if (!firms.length) { container.innerHTML = '<div class="empty-state">No firms found.</div>'; return; }
+
+  container.innerHTML = firms.map(firm => {
+    const meps = [...new Set(firm.meetings.map(m => m.mep_name))];
+    const shown = meps.slice(0, 4);
+    const extra = meps.length - shown.length;
+    return `
+      <div class="card" onclick="openFirm(${JSON.stringify(firm.name)})">
+        <div class="card-title">${esc(firm.name)}</div>
+        <div class="card-sub">${firm.meetings.length} meeting${firm.meetings.length !== 1 ? "s" : ""} · ${meps.length} MEP${meps.length !== 1 ? "s" : ""}</div>
+        <div class="card-firms">
+          ${shown.map(n => `<span class="firm-tag">${esc(n)}</span>`).join("")}
+          ${extra > 0 ? `<span class="firm-tag more">+${extra} more</span>` : ""}
+        </div>
+      </div>`;
+  }).join("");
+}
+
+// ── Render all-meetings table ───────────────────────────────────────────────
+function renderAll() {
+  const q = document.getElementById("all-search").value.toLowerCase();
+  const f = document.getElementById("all-firm").value;
+
+  let meetings = allData.meetings.filter(m => {
+    if (f && !m.matched_firms.some(mf => mf.canonical_firm === f)) return false;
+    if (q) {
+      const text = `${m.mep_name} ${m.mep_country} ${m.meeting_topic} ${m.matched_firms.map(mf => mf.canonical_firm).join(" ")}`.toLowerCase();
+      if (!text.includes(q)) return false;
+    }
+    return true;
+  }).sort((a,b) => (b.meeting_date || "").localeCompare(a.meeting_date || ""));
+
+  document.getElementById("all-count").textContent = `${meetings.length} meetings`;
+
+  const tbody = document.getElementById("all-tbody");
+  if (!meetings.length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:#aaa;">No meetings found.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = meetings.map(m => {
+    const firms = m.matched_firms.map(f => `<span class="firm-tag">${esc(f.canonical_firm)}</span>`).join(" ");
+    return `
+      <tr>
+        <td style="white-space:nowrap">${esc(m.meeting_date ? m.meeting_date.slice(0,10) : "—")}</td>
+        <td><a href="${esc(m.source_url)}" target="_blank" rel="noopener" style="color:#1a5aa0;text-decoration:none">${esc(m.mep_name)}</a></td>
+        <td>${esc(m.mep_country)}</td>
+        <td>${esc(m.mep_group)}</td>
+        <td style="min-width:150px">${firms}</td>
+        <td style="max-width:240px;font-size:12px;color:#666">${esc(m.meeting_topic)}</td>
+      </tr>`;
+  }).join("");
+}
+
+// ── Detail overlays ─────────────────────────────────────────────────────────
+function openMEP(mepId) {
+  const meetings = allData.meetings.filter(m => m.mep_id === mepId);
+  if (!meetings.length) return;
+  const m = meetings[0];
+  const firms = [...new Set(meetings.flatMap(mx => mx.matched_firms.map(f => f.canonical_firm)))];
+
+  document.getElementById("detail-title").textContent = m.mep_name;
+  document.getElementById("detail-badges").innerHTML =
+    `<span class="badge">${esc(m.mep_country)}</span><span class="badge">${esc(m.mep_group)}</span>` +
+    firms.map(f => `<span class="badge" style="background:#e8eef5;color:#1a3a60">${esc(f)}</span>`).join("");
+
+  const sorted = [...meetings].sort((a,b) => (b.meeting_date || "").localeCompare(a.meeting_date || ""));
+  document.getElementById("detail-meetings").innerHTML = sorted.map(mx => `
+    <li class="meeting-item">
+      <div class="meeting-date">${esc(mx.meeting_date ? mx.meeting_date.slice(0,10) : "—")}</div>
+      <div class="meeting-topic">${esc(mx.meeting_topic) || "<em style='color:#aaa'>No topic recorded</em>"}</div>
+      <div class="meeting-firms-row">
+        ${mx.matched_firms.map(f => `<span class="firm-tag">${esc(f.canonical_firm)}</span>`).join("")}
+      </div>
+    </li>`).join("");
+
+  const epLink = document.getElementById("detail-ep-link");
+  epLink.href = m.source_url;
+  epLink.textContent = "View on European Parliament website →";
+  document.getElementById("detail-overlay").classList.add("open");
+}
+
+function openFirm(firmName) {
+  const meetings = allData.meetings.filter(m => m.matched_firms.some(f => f.canonical_firm === firmName));
+  if (!meetings.length) return;
+  const meps = [...new Set(meetings.map(m => m.mep_name))];
+
+  document.getElementById("detail-title").textContent = firmName;
+  document.getElementById("detail-badges").innerHTML =
+    `<span class="badge">${meetings.length} meetings</span><span class="badge">${meps.length} MEPs</span>`;
+
+  const sorted = [...meetings].sort((a,b) => (b.meeting_date || "").localeCompare(a.meeting_date || ""));
+  document.getElementById("detail-meetings").innerHTML = sorted.map(m => `
+    <li class="meeting-item">
+      <div class="meeting-date">${esc(m.meeting_date ? m.meeting_date.slice(0,10) : "—")}</div>
+      <div class="meeting-topic">${esc(m.meeting_topic) || "<em style='color:#aaa'>No topic recorded</em>"}</div>
+      <div class="meeting-firms-row">
+        <span class="firm-tag" style="background:#f0f4e8;color:#2a5010">${esc(m.mep_name)}</span>
+        <span style="font-size:11px;color:#aaa">${esc(m.mep_country)}</span>
+      </div>
+    </li>`).join("");
+
+  document.getElementById("detail-ep-link").textContent = "";
+  document.getElementById("detail-overlay").classList.add("open");
+}
+
+function closeDetail(event) {
+  if (event.target === document.getElementById("detail-overlay")) closeDetailDirect();
+}
+function closeDetailDirect() {
+  document.getElementById("detail-overlay").classList.remove("open");
+}
+
+// ── Tab switching ───────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  document.getElementById(`tab-${name}`).classList.add("active");
+  event.target.classList.add("active");
+}
+
+// ── Escape HTML ─────────────────────────────────────────────────────────────
+function esc(str) {
+  return String(str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+// ── Keyboard close ───────────────────────────────────────────────────────────
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeDetailDirect(); });
+
+// ── Boot ─────────────────────────────────────────────────────────────────────
+loadData();
+</script>
+</body>
+</html>
