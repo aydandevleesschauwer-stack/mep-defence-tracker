@@ -24,19 +24,27 @@ def get_mep_id(mep):
     return str(mep.get("identifier", "")).split("/")[-1]
 
 def get_mep_name(mep):
-    # Probeer eerst 'label'
+    # Probeer eerst oude 'label'
     labels = mep.get("label", [])
     if isinstance(labels, list) and labels:
         item = labels[0]
         if isinstance(item, dict):
-            return item.get("value", "")
+            return item.get("value")
         return str(item)
-    # fallback naar firstName + lastName
+
+    # Probeer nieuw veld 'fullName'
+    if "fullName" in mep:
+        return mep["fullName"]
+
+    # Probeer firstName + lastName
     first = mep.get("firstName", "")
     last = mep.get("lastName", "")
     if first or last:
         return f"{first} {last}".strip()
-    return "UNKNOWN"
+
+    # fallback naar MEP_<ID> voor URL
+    mep_id = get_mep_id(mep)
+    return f"MEP_{mep_id}"
 
 # ─── LOAD FIRMS ────────────────────────────────────
 def load_firms(filepath="firms.csv"):
@@ -54,7 +62,7 @@ def load_firms(filepath="firms.csv"):
 def fetch_all_meps():
     url = "https://data.europarl.europa.eu/api/v2/meps"
     params = {"parliamentary-term": "10", "limit": 705}
-    headers = {"Accept": "application/ld+json"}  # Fix voor 406
+    headers = {"Accept": "application/ld+json"}
 
     try:
         resp = requests.get(url, params=params, headers=headers, timeout=30)
@@ -62,6 +70,8 @@ def fetch_all_meps():
         data = resp.json()
         meps = data.get("data", [])
         print(f"Found {len(meps)} MEPs")
+        # tijdelijk: eerste 3 MEPs loggen voor debugging
+        print("Sample MEPs:", meps[:3])
         return meps
     except Exception as e:
         print("Failed to fetch MEPs:", e)
@@ -137,20 +147,14 @@ def run():
     firms = load_firms()
     meps = fetch_all_meps()
 
-    unknown_count = 0
     all_matches = []
 
     for i, mep in enumerate(meps):
         mep_id = get_mep_id(mep)
         mep_name = get_mep_name(mep)
 
-        if mep_name == "UNKNOWN":
-            unknown_count += 1
-
-        if not mep_id.isdigit():
-            continue
-
         print(f"[{i+1}/{len(meps)}] {mep_name} ({mep_id})")
+
         meetings = fetch_mep_meetings(mep_id, mep_name)
 
         for meeting in meetings:
@@ -167,8 +171,6 @@ def run():
 
         time.sleep(REQUEST_DELAY)
 
-    print(f"UNKNOWN MEPs: {unknown_count} / {len(meps)}")
-
     output = {
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "total_matches": len(all_matches),
@@ -180,6 +182,5 @@ def run():
 
     print("Done!")
 
-# ─── RUN ───────────────────────────────────────────
 if __name__ == "__main__":
     run()
