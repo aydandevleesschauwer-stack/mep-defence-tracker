@@ -65,15 +65,16 @@ def fetch_all_meps():
     """
     print("Fetching MEP list from EP Open Data API...")
     url = f"{EP_API}/meps"
+    # Note: format must be sent as an Accept header, not a URL parameter
+    headers = {"Accept": "application/json"}
     params = {
-        "format": "application/json",
         "parliamentary-term": "10",  # 10th parliamentary term (2024–2029)
         "limit": 1000,
         "offset": 0
     }
     all_meps = []
     while True:
-        resp = requests.get(url, params=params, timeout=30)
+        resp = requests.get(url, params=params, headers=headers, timeout=30)
         resp.raise_for_status()
         data = resp.json()
         batch = data.get("data", [])
@@ -96,13 +97,13 @@ def fetch_mep_meetings(mep_id):
     Returns a list of meeting dicts, or empty list if none/error.
     """
     url = f"{EP_API}/meps/{mep_id}/activities"
+    headers = {"Accept": "application/json"}
     params = {
-        "format": "application/json",
         "activity-type": "MEETING",
         "limit": 200
     }
     try:
-        resp = requests.get(url, params=params, timeout=30)
+        resp = requests.get(url, params=params, headers=headers, timeout=30)
         if resp.status_code == 404:
             return []  # This MEP has no meetings recorded
         resp.raise_for_status()
