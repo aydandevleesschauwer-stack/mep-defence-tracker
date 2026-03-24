@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup
 FUZZY_THRESHOLD = 85
 REQUEST_DELAY = 1.0
 OUTPUT_FILE = os.path.join("data", "meetings.json")
+MEP_LIST_URL = "https://www.europarl.europa.eu/meps/en/full-list/all"
 
 # ─── HELPERS ───────────────────────────────────────
 def slugify(name):
@@ -19,24 +20,6 @@ def slugify(name):
         .replace("-", "_")
         .replace("'", "")
     )
-
-def get_mep_id(mep):
-    return str(mep.get("identifier", "")).split("/")[-1]
-
-def get_mep_name(mep):
-    labels = mep.get("label", [])
-    if isinstance(labels, list) and labels:
-        item = labels[0]
-        if isinstance(item, dict):
-            return item.get("value")
-        return str(item)
-    if "fullName" in mep:
-        return mep["fullName"]
-    first = mep.get("firstName", "")
-    last = mep.get("lastName", "")
-    if first or last:
-        return f"{first} {last}".strip()
-    return f"MEP_{get_mep_id(mep)}"
 
 # ─── LOAD FIRMS ────────────────────────────────────
 def load_firms(filepath="firms.csv"):
@@ -50,35 +33,43 @@ def load_firms(filepath="firms.csv"):
     print(f"Loaded {len(firms)} firms")
     return firms
 
-# ─── FETCH MEPS ────────────────────────────────────
-def fetch_all_meps():
-    url = "https://data.europarl.europa.eu/api/v2/meps"
-    params = {"parliamentary-term": "10", "limit": 705}
-    headers = {"Accept": "application/json"}
+# ─── FETCH MEP LIST ───────────────────────────────
+def fetch_meps():
     try:
-        resp = requests.get(url, params=params, headers=headers, timeout=30)
+        resp = requests.get(MEP_LIST_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
         resp.raise_for_status()
-        data = resp.json()
-        meps = data.get("data", [])
-        print(f"Found {len(meps)} MEPs")
-        print("Sample MEPs:", meps[:3])
-        return meps
     except Exception as e:
-        print("Failed to fetch MEPs:", e)
+        print("Failed to fetch MEP list:", e)
         return []
 
-# ─── FETCH MEETINGS ────────────────────────────────
-def fetch_mep_meetings(mep_id, mep_name):
-    slug = slugify(mep_name)
-    url = f"https://www.europarl.europa.eu/meps/en/{mep_id}/{slug}/meetings/past"
-    print(f"Fetching URL: {url}")
+    soup = BeautifulSoup(resp.text, "lxml")
+    meps = []
+
+    # Elke MEP staat in een <a> binnen div.erpl_mep
+    for a in soup.select("div.erpl_mep a"):
+        href = a.get("href")
+        if not href or "/meetings/past" in href:
+            continue
+        parts = href.strip("/").split("/")
+        if len(parts) >= 4:
+            mep_id = parts[-2]
+            mep_slug = parts[-1]
+            mep_name = a.get_text(strip=True)
+            meps.append({"id": mep_id, "slug": mep_slug, "name": mep_name})
+    print(f"Found {len(meps)} MEPs")
+    return meps
+
+# ─── FETCH MEETINGS ───────────────────────────────
+def fetch_mep_meetings(mep):
+    url = f"https://www.europarl.europa.eu/meps/en/{mep['id']}/{mep['slug']}/meetings/past"
+    print(f"Fetching meetings for {mep['name']} ({mep['id']}) -> {url}")
     try:
-        resp = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0"}, allow_redirects=True)
+        resp = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
         if resp.status_code != 200:
-            print(f"  Skipping {mep_id} ({resp.status_code})")
+            print(f"  Skipping {mep['id']} ({resp.status_code})")
             return []
     except requests.RequestException as e:
-        print(f"  Error for {mep_id}: {e}")
+        print(f"  Error for {mep['id']}: {e}")
         return []
 
     soup = BeautifulSoup(resp.text, "lxml")
@@ -86,7 +77,8 @@ def fetch_mep_meetings(mep_id, mep_name):
 
     entries = soup.select("div.erpl_document")
     if not entries:
-        print(f"  No meetings found for {mep_name} ({mep_id})")
+        print(f"  No meetings found for {mep['name']} ({mep['id']})")
+
     for entry in entries:
         date_tag = entry.select_one("time")
         topic_tag = entry.select_one("h3")
@@ -107,7 +99,7 @@ def fetch_mep_meetings(mep_id, mep_name):
             "organisations": list(set(orgs))
         })
 
-    print(f"  Found {len(meetings)} meetings for {mep_name}")
+    print(f"  Found {len(meetings)} meetings for {mep['name']}")
     return meetings
 
 # ─── MATCH FIRMS ───────────────────────────────────
@@ -132,29 +124,24 @@ def match_firms(org_names, firms):
 # ─── MAIN ──────────────────────────────────────────
 def run():
     os.makedirs("data", exist_ok=True)
-
     firms = load_firms()
-    meps = fetch_all_meps()
+    meps = fetch_meps()
     all_matches = []
 
     for i, mep in enumerate(meps):
-        mep_id = get_mep_id(mep)
-        mep_name = get_mep_name(mep)
-        print(f"[{i+1}/{len(meps)}] {mep_name} ({mep_id})")
-
-        meetings = fetch_mep_meetings(mep_id, mep_name)
+        print(f"[{i+1}/{len(meps)}] {mep['name']} ({mep['id']})")
+        meetings = fetch_mep_meetings(mep)
         for meeting in meetings:
             matched = match_firms(meeting["organisations"], firms)
             if matched:
                 all_matches.append({
-                    "mep_id": mep_id,
-                    "mep_name": mep_name,
+                    "mep_id": mep["id"],
+                    "mep_name": mep["name"],
                     "meeting_date": meeting["date"],
                     "meeting_topic": meeting["topic"],
                     "matched_firms": matched
                 })
                 print("  ✓ match")
-
         time.sleep(REQUEST_DELAY)
 
     output = {
