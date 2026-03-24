@@ -19,11 +19,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Check out your repository
+      # 1. Check out your repository with token
       - name: Check out repository
         uses: actions/checkout@v4
         with:
-          persist-credentials: false   # belangrijk voor push met GITHUB_TOKEN
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       # 2. Set up Python 3.11
       - name: Set up Python
@@ -48,6 +48,6 @@ jobs:
           git add data/meetings.json
           # Only commit if something actually changed
           git diff --staged --quiet || git commit -m "Auto-refresh: $(date -u +'%Y-%m-%d')"
-          git push https://x-access-token:${GITHUB_TOKEN}@github.com/aydandevleesschauwer-stack/mep-defence-tracker.git
+          git push origin HEAD:main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
