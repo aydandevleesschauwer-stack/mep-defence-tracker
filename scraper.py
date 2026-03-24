@@ -8,13 +8,11 @@ from rapidfuzz import fuzz
 from bs4 import BeautifulSoup
 
 # ─── CONFIG ─────────────────────────────────────────
-
 FUZZY_THRESHOLD = 85
 REQUEST_DELAY = 1.0
 OUTPUT_FILE = os.path.join("data", "meetings.json")
 
 # ─── HELPERS ───────────────────────────────────────
-
 def slugify(name):
     return (
         name.upper()
@@ -34,7 +32,6 @@ def get_mep_name(mep):
     return "UNKNOWN"
 
 # ─── LOAD FIRMS ────────────────────────────────────
-
 def load_firms(filepath="firms.csv"):
     firms = {}
     with open(filepath, newline="", encoding="utf-8") as f:
@@ -47,13 +44,13 @@ def load_firms(filepath="firms.csv"):
     return firms
 
 # ─── FETCH MEPS ────────────────────────────────────
-
 def fetch_all_meps():
     url = "https://data.europarl.europa.eu/api/v2/meps"
     params = {"parliamentary-term": "10", "limit": 705}
+    headers = {"Accept": "application/ld+json"}  # << Fix voor 406 error
 
     try:
-        resp = requests.get(url, params=params, headers={"Accept": "application/json"}, timeout=30)
+        resp = requests.get(url, params=params, headers=headers, timeout=30)
         resp.raise_for_status()
         data = resp.json()
         meps = data.get("data", [])
@@ -64,7 +61,6 @@ def fetch_all_meps():
         return []
 
 # ─── FETCH MEETINGS ────────────────────────────────
-
 def fetch_mep_meetings(mep_id, mep_name):
     slug = slugify(mep_name)
     url = f"https://www.europarl.europa.eu/meps/en/{mep_id}/{slug}/meetings/past"
@@ -108,7 +104,6 @@ def fetch_mep_meetings(mep_id, mep_name):
     return meetings
 
 # ─── MATCH FIRMS ───────────────────────────────────
-
 def match_firms(org_names, firms):
     matched = []
     seen = set()
@@ -130,7 +125,6 @@ def match_firms(org_names, firms):
     return matched
 
 # ─── MAIN ──────────────────────────────────────────
-
 def run():
     os.makedirs("data", exist_ok=True)
 
@@ -176,6 +170,5 @@ def run():
     print("Done!")
 
 # ─── RUN ───────────────────────────────────────────
-
 if __name__ == "__main__":
     run()
